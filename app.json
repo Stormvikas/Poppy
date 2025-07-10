@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Poppy 💥",
+    "slug": "poppy-verifier",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "platforms": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6ba24aa4-cbd1-4d78-9c3d-b543d74ba6a9"
+      }
+    }
+  }
+}
