@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, Alert, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
-import Verifier from './Verifier';
 
 export default function App() {
   const [serverSeed, setServerSeed] = useState('');
@@ -35,23 +34,69 @@ export default function App() {
 
   const generateMines = () => {
     if (!serverSeed || !clientSeed || !nonce) {
-      Alert.alert('Error', 'Fill all fields!');
+      Alert.alert('Error', 'Please fill all fields.');
       return;
     }
+
     saveInputs();
-    const hash = CryptoJS.HmacSHA256(`${clientSeed}:${nonce}`, serverSeed).toString();
-    let numbers = [];
-    for (let i = 0; numbers.length < mineCount && i < hash.length - 5; i += 5) {
-      let num = parseInt(hash.substr(i, 5), 16) % 25;
-      if (!numbers.includes(num)) numbers.push(num);
+
+    const tiles = Array.from({ length: 25 }, (_, i) => i);
+    const mineTiles = [];
+    let round = 0;
+
+    while (mineTiles.length < mineCount) {
+      const input = `${clientSeed}:${nonce}:${round}`;
+      const hmac = CryptoJS.HmacSHA256(input, serverSeed).toString();
+
+      for (let i = 0; i < hmac.length && mineTiles.length < mineCount; i += 8) {
+        const segment = hmac.substring(i, i + 8);
+        if (segment.length < 8) break;
+
+        const int = parseInt(segment, 16);
+        const float = int / 0xffffffff;
+
+        const availableTiles = tiles.filter(t => !mineTiles.includes(t));
+        const selected = Math.floor(float * availableTiles.length);
+
+        if (availableTiles.length > 0) {
+          mineTiles.push(availableTiles[selected]);
+        }
+      }
+
+      round++;
+      if (round > 1000) break; // avoid infinite loop
     }
+
     let newGrid = Array(25).fill(false);
-    numbers.forEach(i => newGrid[i] = true);
+    mineTiles.forEach(i => newGrid[i] = true);
     setGrid(newGrid);
   };
 
-  const loadJSON = () => {
-    Verifier({ setServerSeed, setClientSeed, setNonce });
+  const exportToJson = async () => {
+    const data = {
+      serverSeed,
+      clientSeed,
+      nonce,
+      mineCount,
+      mines: grid.map((val, i) => val ? i : null).filter(v => v !== null),
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    await Share.share({ title: 'Mines Result', message: json });
+  };
+
+  const prevRound = () => {
+    const prev = parseInt(nonce) - 1;
+    if (prev >= 0) {
+      setNonce(prev.toString());
+      setTimeout(generateMines, 100);
+    }
+  };
+
+  const nextRound = () => {
+    const next = parseInt(nonce) + 1;
+    setNonce(next.toString());
+    setTimeout(generateMines, 100);
   };
 
   return (
@@ -61,10 +106,17 @@ export default function App() {
       <TextInput style={styles.input} placeholder="Client Seed" value={clientSeed} onChangeText={setClientSeed} />
       <TextInput style={styles.input} placeholder="Nonce" value={nonce} onChangeText={setNonce} keyboardType="numeric" />
       <TextInput style={styles.input} placeholder="Mine Count" value={mineCount.toString()} onChangeText={t => setMineCount(parseInt(t) || 0)} keyboardType="numeric" />
+
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.button} onPress={generateMines}><Text style={styles.buttonText}>Verify</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={loadJSON}><Text style={styles.buttonText}>Load JSON</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={exportToJson}><Text style={styles.buttonText}>Export JSON</Text></TouchableOpacity>
       </View>
+
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={styles.button} onPress={prevRound}><Text style={styles.buttonText}>← Prev</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={nextRound}><Text style={styles.buttonText}>Next →</Text></TouchableOpacity>
+      </View>
+
       <FlatList
         data={grid}
         numColumns={5}
@@ -75,6 +127,10 @@ export default function App() {
           </View>
         )}
       />
+
+      <Text style={styles.debug}>
+        Mines: {grid.map((x, i) => x ? i : null).filter(Boolean).join(', ')}
+      </Text>
     </View>
   );
 }
@@ -88,4 +144,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', textAlign: 'center' },
   cell: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center', margin: 2, borderRadius: 6 },
   cellText: { color: '#fff', fontSize: 18 },
+  debug: { color: '#aaa', marginTop: 10, fontSize: 12 }
 });
